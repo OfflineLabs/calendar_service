@@ -3,11 +3,11 @@ from django.core.urlresolvers import NoReverseMatch
 from rest_framework import serializers, fields
 from rest_framework.reverse import reverse
 
-from fields import JSONSerializerField
+from api.fields import JSONSerializerField
 from schedule.models.calendars import Calendar
 from schedule.models.events import Event, Occurrence
 from schedule.models.rules import Rule
-from utils import get_detail_routes
+from api.utils import get_detail_routes
 
 
 class CalendarSerializer(serializers.HyperlinkedModelSerializer):
@@ -17,7 +17,7 @@ class CalendarSerializer(serializers.HyperlinkedModelSerializer):
 
 class EventSerializer(serializers.HyperlinkedModelSerializer):
     occurrences = fields.SerializerMethodField()
-    rule_params = JSONSerializerField() # required to make json field writable via api
+    rule_params = JSONSerializerField(required=False) # required to make json field writable via api
 
     class Meta:
         model = Event

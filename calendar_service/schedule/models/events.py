@@ -37,7 +37,7 @@ class Event(with_metaclass(ModelBase, *get_model_bases())):
     '''
     start = models.DateTimeField(_("start"))
     end = models.DateTimeField(_("end"), help_text=_("The end time must be later than the start time."))
-    title = models.CharField(_("title"), max_length=255)
+    title = models.CharField(_("title"), max_length=255, blank=True, null=True)
     description = models.TextField(_("description"), null=True, blank=True)
     created_on = models.DateTimeField(_("created on"), auto_now_add=True)
     updated_on = models.DateTimeField(_("updated on"), auto_now=True)
@@ -117,8 +117,8 @@ class Event(with_metaclass(ModelBase, *get_model_bases())):
 
     def get_rrule_object(self):
         if self.rule is not None:
-            params = self.rule.get_params()
-            params.update(self.rule_params)
+            params = self.rule.get_params() or {}
+            params.update(self.rule_params or {})
             frequency = self.rule.rrule_frequency()
             return rrule.rrule(frequency, dtstart=self.start, **params)
 
@@ -398,10 +398,10 @@ class Occurrence(with_metaclass(ModelBase, *get_model_bases())):
     def move(self, new_start, new_end):
         self.start = new_start
         self.end = new_end
+        self.save()
 
     def uncancel(self):
         self.cancelled = False
-        self.save()
         self.save()
 
     # these get url functions do not apply to the rest api

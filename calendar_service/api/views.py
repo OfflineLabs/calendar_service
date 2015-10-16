@@ -1,14 +1,13 @@
 from datetime import timedelta
-import itertools
-from test.test_normalization import RangeError
 
 from dateutil import parser
 from django.core.exceptions import ObjectDoesNotExist
-from django.http.response import HttpResponse, HttpResponseBadRequest
+from django.http.response import HttpResponseBadRequest
 from django.utils import timezone
 from django.utils.functional import cached_property
 from rest_framework import viewsets
 from rest_framework.decorators import detail_route
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.response import Response
 
 from api.serializers import CalendarSerializer, EventSerializer, RuleSerializer, \
@@ -48,6 +47,7 @@ class OccurrenceViewSet(viewsets.ModelViewSet):
     serializer_class = OccurrenceSerializer
     default_end_delta = {'days': 31}
     default_limit = 1000
+    lookup_field = 'lookup' # lookup can be pk or occurrence start datetime
     
     @cached_property
     def event(self):
@@ -62,12 +62,8 @@ class OccurrenceViewSet(viewsets.ModelViewSet):
     def cancel(self, request, **kwargs):
         return self.set_cancelled(True)
     
-    def set_cancelled(self, cancelled):
-        occ = self.get_object()
-        occ.cancelled = cancelled
-        occ.save()
-        serializer = self.get_serializer(occ)
-        return Response(serializer.data)
+    def destroy(self, request, *args, **kwargs):
+        raise MethodNotAllowed('DELETE')
     
     def dispatch(self, request, event_id, **kwargs):
         self.event_id = event_id
@@ -75,21 +71,23 @@ class OccurrenceViewSet(viewsets.ModelViewSet):
     
     def get_object(self):
         lookups = {'event_id': self.event_id,}
+        # determine if lookup is by id or 
         try:
-            pk = self.kwargs.pk
+            occ_id = int(self.kwargs['lookup'])
         except ValueError:
-            start = parser.parse(self.kwargs['pk'])
-            lookups['start': start]
+            start = parser.parse(self.kwargs['lookup'])
+            lookups['start'] = start
         else:
-            lookups['id':pk]
+            lookups['id'] = occ_id
         try:
             p_occ = Occurrence.objects.get(**lookups)
         except ObjectDoesNotExist:
-            occurrences = self.event.get_occurrences(start=start, end=start)
-            if occurrences:
-                return occurrences[0]
-            else:
+            try:
+                occ = self.event.get_occurrences(start=start, end=start)[0]
+            except ValueError:
                 raise
+            else:
+                return occ
         else:
             return p_occ
     
@@ -135,6 +133,13 @@ class OccurrenceViewSet(viewsets.ModelViewSet):
             else:
                 self.end = end
         return viewsets.ModelViewSet.list(self, request, *args, **kwargs)
+    
+    def set_cancelled(self, cancelled):
+        occ = self.get_object()
+        occ.cancelled = cancelled
+        occ.save()
+        serializer = self.get_serializer(occ)
+        return Response(serializer.data)
     
     @detail_route(methods=['patch','put', 'post'])
     def uncancel(self, request, **kwargs):
